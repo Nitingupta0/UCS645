@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GraphPulse Zero Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&family=Space+Grotesk:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                "colors": {
+                    "surface-container-low": "#1a1c1c",
+                    "outline": "#8e9192",
+                    "surface": "#121414",
+                    "surface-container-lowest": "#0c0f0f",
+                    "surface-container": "#1e2020",
+                    "on-surface-variant": "#c4c7c7",
+                    "surface-container-high": "#282a2b",
+                    "on-primary": "#313030",
+                    "surface-variant": "#333535",
+                    "secondary": "#fabd32",
+                    "on-surface": "#e2e2e2",
+                    "background": "#121414",
+                    "outline-variant": "#444748",
+                    "primary": "#c9c6c5",
+                },
+                "spacing": {
+                    "tile-padding": "32px",
+                    "gutter": "1px",
+                },
+                "fontFamily": {
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Space Grotesk"],
+                    "label-mono": ["Space Grotesk"],
+                    "headline-md": ["Space Grotesk"],
+                    "display-xl": ["Space Grotesk"]
+                },
+                "fontSize": {
+                    "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                    "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                    "headline-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                    "label-mono": ["12px", { "lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "500" }],
+                    "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "400" }],
+                    "display-xl": ["72px", { "lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "500" }]
+                }
+            }
+        }
+    }
+</script>
+<style>
+    body {
+        background-color: theme('colors.background');
+        color: theme('colors.on-background');
+    }
+    .graph-pattern {
+        background-image: radial-gradient(rgba(196, 199, 199, 0.22) 1px, transparent 1px);
+        background-size: 24px 24px;
+    }
+    #terminal-output {
+        font-family: "JetBrains Mono", monospace;
+        white-space: pre-wrap;
+        font-size: 12px;
+        color: #fabd32;
+    }
+    .zoomable-graph {
+        cursor: zoom-in;
+    }
+    body.lightbox-open {
+        overflow: hidden;
+    }
+    .lightbox {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+    }
+    .lightbox.is-open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .lightbox-panel {
+        transform: scale(0.98);
+        opacity: 0;
+        transition: transform 180ms ease, opacity 180ms ease;
+    }
+    .lightbox.is-open .lightbox-panel {
+        transform: scale(1);
+        opacity: 1;
+    }
+    .lightbox-nav {
+        width: 40px;
+        height: 40px;
+        border: 1px solid #444748;
+        background: rgba(18, 20, 20, 0.85);
+        color: #c4c7c7;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    }
+    .lightbox-nav:hover {
+        border-color: #fabd32;
+        color: #fabd32;
+        box-shadow: 0 0 18px rgba(250, 189, 50, 0.12);
+    }
+    .lightbox-nav:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .module-expandable {
+        cursor: zoom-in;
+        transition: box-shadow 180ms ease, border-color 180ms ease;
+    }
+    .module-expandable:hover {
+        box-shadow: 0 0 0 1px rgba(250, 189, 50, 0.2);
+    }
+    .pipeline-step {
+        cursor: pointer;
+        transition: stroke 150ms ease, fill 150ms ease;
+    }
+    .pipeline-step:hover,
+    .pipeline-step:focus {
+        stroke: #fabd32;
+        fill: #1e2020;
+    }
+    .pipeline-step:focus {
+        outline: none;
+    }
+    .run-progress-bar {
+        animation: progress-slide 1.2s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(100%); }
+        100% { transform: translateX(200%); }
+    }
+</style>
+</head>
+<body class="min-h-screen flex flex-col font-body-md text-body-md bg-background text-on-background selection:bg-secondary selection:text-[#412d00]">
+<nav class="bg-[#0A0A0A] text-white font-['Space_Grotesk'] tracking-tight text-sm uppercase flex justify-between items-center w-full px-8 h-16 border-b border-white/10">
+    <div class="text-2xl font-bold tracking-tighter text-white">GRAPHPULSE</div>
+    <div class="hidden md:flex gap-2 items-center h-full">
+        <button type="button" data-tab="systems" class="tab-btn text-white border-b border-white pb-1 flex flex-col justify-center h-full px-4">Systems</button>
+        <button type="button" data-tab="intelligence" class="tab-btn text-white/50 hover:text-white transition-colors hover:bg-white/5 flex flex-col justify-center h-full px-4">Intelligence</button>
+        <button type="button" data-tab="architecture" class="tab-btn text-white/50 hover:text-white transition-colors hover:bg-white/5 flex flex-col justify-center h-full px-4">Architecture</button>
+    </div>
+    <div class="flex items-center gap-4">
+        <button type="button" data-execute class="flex items-center justify-center bg-white text-black px-4 py-1.5 font-bold hover:bg-secondary transition-colors uppercase text-xs tracking-wider border border-white">
+            Execute Pipeline
+        </button>
+    </div>
+</nav>
+
+<main class="flex-grow w-full px-8 py-12 max-w-[1920px] mx-auto">
+    <section id="panel-systems" data-panel="systems" class="tab-panel">
+    <header class="mb-16 border-b border-surface-variant pb-8 flex flex-col md:flex-row justify-between items-end gap-8">
+        <div>
+            <h1 class="font-display-xl text-display-xl text-on-surface mb-2">ZERO DASHBOARD</h1>
+            <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">Executive overview of real-time graph intelligence, throughput metrics, and active kernel distribution across the global network.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span id="sync-indicator" class="w-3 h-3 bg-secondary rounded-full"></span>
+            <span id="sync-text" class="font-label-mono text-label-mono text-secondary uppercase tracking-widest">Ready</span>
+        </div>
+    </header>
+
+    <div class="mb-12 grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div class="md:col-span-9 bg-surface p-6 border border-surface-variant module-expandable">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <label class="flex flex-col gap-2 text-on-surface-variant">
+                    <span class="font-label-mono text-label-mono uppercase tracking-widest">Vertices</span>
+                    <input id="input-vertices" type="number" min="100" max="1000000" value="10000" class="bg-surface-container-low text-on-surface px-3 py-2 border border-outline-variant rounded" />
+                </label>
+                <label class="flex flex-col gap-2 text-on-surface-variant">
+                    <span class="font-label-mono text-label-mono uppercase tracking-widest">Threads</span>
+                    <input id="input-threads" type="number" min="1" max="256" value="8" class="bg-surface-container-low text-on-surface px-3 py-2 border border-outline-variant rounded" />
+                </label>
+                <label class="flex flex-col gap-2 text-on-surface-variant">
+                    <span class="font-label-mono text-label-mono uppercase tracking-widest">Dataset</span>
+                    <select id="input-dataset" class="bg-surface-container-low text-on-surface px-3 py-2 border border-outline-variant rounded">
+                        <option value="">Synthetic (BA)</option>
+                        <option value="" disabled>Loading datasets...</option>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-3 text-on-surface-variant">
+                    <span class="font-label-mono text-label-mono uppercase tracking-widest">GPU Mode</span>
+                    <div class="flex items-center gap-2">
+                        <input id="input-gpu" type="checkbox" class="h-4 w-4 rounded border-outline-variant bg-surface-container-low" />
+                        <span class="text-sm">Enable CUDA</span>
+                    </div>
+                </label>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center gap-4">
+                <button type="button" data-execute class="bg-secondary text-black px-4 py-2 font-bold uppercase text-xs tracking-wider">Run Pipeline</button>
+                <p id="run-hint" class="text-sm text-on-surface-variant">Use a dataset for real-world graphs or leave blank for synthetic.</p>
+            </div>
+        </div>
+        <div class="md:col-span-3 bg-surface p-6 border border-surface-variant flex flex-col gap-3 module-expandable">
+            <div class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-widest">Run Status</div>
+            <div id="run-status" class="text-on-surface text-xl">Idle</div>
+            <div class="text-on-surface-variant text-sm">Engine: <span id="run-engine">CPU</span></div>
+            <div class="text-on-surface-variant text-sm">Edges: <span id="val-edges">--</span></div>
+            <div class="text-on-surface-variant text-sm">Total: <span id="val-total">--</span> ms</div>
+            <div class="text-on-surface-variant text-sm">Elapsed: <span id="run-elapsed">--</span></div>
+            <div id="run-progress" class="mt-3 h-1 w-full bg-white/10 overflow-hidden hidden">
+                <div class="h-full w-1/3 bg-secondary run-progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-[1px] bg-surface-variant p-[1px]">
+        <div class="col-span-1 md:col-span-4 flex flex-col gap-[1px]">
+            <div class="bg-surface p-tile-padding relative overflow-hidden group hover:bg-surface-container-low transition-colors duration-300 min-h-[300px] flex flex-col justify-between module-expandable">
+                <div class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-widest">Throughput</div>
+                <div>
+                    <div id="val-throughput" class="font-display-xl text-display-xl text-on-surface group-hover:text-secondary transition-colors">--</div>
+                    <div class="font-headline-md text-headline-md text-on-surface-variant">MEPS</div>
+                </div>
+                <div class="absolute bottom-4 right-4 font-label-mono text-label-mono text-on-surface-variant/50">SYS.01</div>
+            </div>
+            <div class="bg-surface p-tile-padding relative overflow-hidden group hover:bg-surface-container-low transition-colors duration-300 min-h-[300px] flex flex-col justify-between module-expandable">
+                <div class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-widest">Speedup Factor</div>
+                <div>
+                    <div id="val-speedup" class="font-display-xl text-display-xl text-on-surface">-- x</div>
+                    <div class="font-body-md text-body-md text-secondary mt-2 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">trending_up</span>
+                        OpenMP + CUDA
+                    </div>
+                </div>
+                <div class="absolute bottom-4 right-4 font-label-mono text-label-mono text-on-surface-variant/50">SYS.02</div>
+            </div>
+        </div>
+
+        <div class="col-span-1 md:col-span-8 bg-surface relative overflow-hidden flex flex-col min-h-[600px] module-expandable">
+            <div class="p-tile-padding z-10 flex justify-between items-start">
+                <h2 class="font-headline-md text-headline-md text-on-surface">Topology Visualization</h2>
+                <span class="border border-outline px-3 py-1 font-label-mono text-label-mono text-on-surface-variant uppercase">Global Graph</span>
+            </div>
+            <div class="flex-grow relative w-full h-full graph-pattern flex items-center justify-center p-8">
+                <div class="w-full h-full border border-surface-variant relative flex items-center justify-center bg-surface-container-lowest/50">
+                    <div class="absolute inset-0 bg-cover bg-center opacity-25" style="background-image: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent"></div>
+
+                    <canvas id="topology-canvas" class="absolute inset-0 opacity-100"></canvas>
+
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="bg-surface/90 border border-white/20 backdrop-blur-sm p-5 rounded shadow-xl">
+                            <div class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-widest mb-3">Workload Split</div>
+                            <canvas id="chart-topology-split" width="220" height="220"></canvas>
+                            <div id="topology-status" class="mt-3 text-xs text-on-surface-variant">Awaiting run</div>
+                        </div>
+                    </div>
+                    
+                    <div class="absolute top-8 left-8 border border-white/20 p-4 bg-surface/80 backdrop-blur-sm">
+                        <div class="font-label-mono text-label-mono text-white mb-2">GPU Vertices</div>
+                        <div id="val-gpu" class="font-headline-md text-headline-md text-secondary">--</div>
+                    </div>
+                    <div class="absolute bottom-8 right-8 border border-white/20 p-4 bg-surface/80 backdrop-blur-sm">
+                        <div class="font-label-mono text-label-mono text-white mb-2">RF Accuracy</div>
+                        <div id="val-accuracy" class="font-headline-md text-headline-md text-white">--</div>
+                    </div>
+                    <div class="absolute bottom-8 left-8 border border-white/20 p-4 bg-surface/80 backdrop-blur-sm">
+                        <div class="font-label-mono text-label-mono text-white mb-2">CPU Vertices</div>
+                        <div id="val-cpu" class="font-headline-md text-headline-md text-[#818CF8]">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-span-1 md:col-span-12 bg-[#0c0f0f] p-tile-padding min-h-[300px] flex flex-col border-t border-surface-variant module-expandable">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Pipeline Execution Log</h3>
+            <div id="terminal-output" class="bg-black/50 p-4 rounded border border-outline-variant/60 h-64 overflow-y-auto">
+> Waiting for execution...
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="panel-intelligence" data-panel="intelligence" class="tab-panel hidden">
+    <header class="mb-12 border-b border-surface-variant pb-6">
+        <h2 class="font-headline-md text-headline-md text-on-surface">Performance Intelligence</h2>
+        <p class="text-on-surface-variant max-w-3xl">Interactive comparisons of CPU vs GPU, dataset runtimes, and accuracy trends. All charts load from the latest benchmark outputs.</p>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-[1px] bg-surface-variant p-[1px]">
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Dataset Runtime</h3>
+            <canvas id="chart-dataset-runtime" height="220" class="zoomable-graph"></canvas>
+        </div>
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Dataset Accuracy</h3>
+            <canvas id="chart-dataset-accuracy" height="220" class="zoomable-graph"></canvas>
+        </div>
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">CPU vs GPU Total Time</h3>
+            <canvas id="chart-cpu-gpu-total" height="220" class="zoomable-graph"></canvas>
+        </div>
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">CPU vs GPU Throughput</h3>
+            <canvas id="chart-cpu-gpu-throughput" height="220" class="zoomable-graph"></canvas>
+        </div>
+    </div>
+
+    <div class="mt-12">
+        <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Plot Gallery</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <img class="zoomable-graph w-full h-52 object-contain bg-surface-container-lowest border border-surface-variant" src="/assets/plots/benchmark/speedup_curve.png" alt="Speedup curve" />
+            <img class="zoomable-graph w-full h-52 object-contain bg-surface-container-lowest border border-surface-variant" src="/assets/plots/benchmark/strong_scaling.png" alt="Strong scaling" />
+            <img class="zoomable-graph w-full h-52 object-contain bg-surface-container-lowest border border-surface-variant" src="/assets/plots/cpu_gpu_total_time.png" alt="CPU vs GPU total time" />
+            <img class="zoomable-graph w-full h-52 object-contain bg-surface-container-lowest border border-surface-variant" src="/assets/plots/dataset_runtime.png" alt="Dataset runtime comparison" />
+        </div>
+    </div>
+</section>
+
+<section id="panel-architecture" data-panel="architecture" class="tab-panel hidden">
+    <header class="mb-12 border-b border-surface-variant pb-6">
+        <h2 class="font-headline-md text-headline-md text-on-surface">Methodology + Objectives</h2>
+        <p class="text-on-surface-variant max-w-3xl">Concise scope summary derived from the project brief: sequential baselines, OpenMP feature extraction, CUDA preprocessing, and performance evaluation on real graphs.</p>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-[1px] bg-surface-variant p-[1px]">
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Objectives</h3>
+            <ul class="text-on-surface-variant space-y-2 list-disc list-inside">
+                <li>Implement sequential baselines for degree, betweenness, PageRank, and clustering.</li>
+                <li>Parallelize feature extraction using OpenMP with multi-level strategies.</li>
+                <li>Develop CUDA kernels for preprocessing and matrix operations.</li>
+                <li>Train a parallel Random Forest with tree and node-level parallelism.</li>
+                <li>Measure speedup, scalability, and accuracy on real-world datasets.</li>
+            </ul>
+        </div>
+        <div class="col-span-1 md:col-span-6 bg-surface p-tile-padding">
+            <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-4">Methodology</h3>
+            <ul class="text-on-surface-variant space-y-2 list-disc list-inside">
+                <li>Build CSR graph representation and adaptive CPU/GPU splitting by degree.</li>
+                <li>Apply OpenMP scheduling for irregular workloads and load balance.</li>
+                <li>Use CUDA for regular preprocessing (z-score/min-max) and GEMM-based distance.</li>
+                <li>Integrate CPU and GPU stages with efficient data movement.</li>
+                <li>Evaluate on SNAP datasets and visualize performance trends.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="mt-12 bg-surface p-tile-padding border border-surface-variant">
+        <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-6">Hybrid Pipeline Diagram</h3>
+        <div class="overflow-x-auto">
+            <svg width="980" height="320" viewBox="0 0 980 320" role="img" aria-label="Hybrid CPU-GPU pipeline diagram">
+                <defs>
+                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <path d="M0,0 L6,3 L0,6 Z" fill="#c4c7c7" />
+                    </marker>
+                </defs>
+
+                <rect x="20" y="30" width="160" height="60" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="Graph Input" role="button" tabindex="0" />
+                <text x="100" y="60" text-anchor="middle" fill="#e2e2e2" font-size="14">Graph Input</text>
+
+                <rect x="210" y="30" width="160" height="60" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="CSR Builder" role="button" tabindex="0" />
+                <text x="290" y="60" text-anchor="middle" fill="#e2e2e2" font-size="14">CSR Builder</text>
+
+                <rect x="400" y="30" width="180" height="60" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="Workload Split" role="button" tabindex="0" />
+                <text x="490" y="60" text-anchor="middle" fill="#e2e2e2" font-size="14">Workload Split</text>
+
+                <rect x="620" y="10" width="160" height="60" rx="10" fill="#1e2020" stroke="#fabd32" class="pipeline-step" data-pipeline-step="CPU Features" role="button" tabindex="0" />
+                <text x="700" y="40" text-anchor="middle" fill="#fabd32" font-size="13">CPU Features</text>
+                <text x="700" y="58" text-anchor="middle" fill="#c4c7c7" font-size="11">OpenMP</text>
+
+                <rect x="620" y="90" width="160" height="60" rx="10" fill="#1e2020" stroke="#8ab4f8" class="pipeline-step" data-pipeline-step="GPU Preprocess" role="button" tabindex="0" />
+                <text x="700" y="120" text-anchor="middle" fill="#8ab4f8" font-size="13">GPU Preprocess</text>
+                <text x="700" y="138" text-anchor="middle" fill="#c4c7c7" font-size="11">CUDA</text>
+
+                <rect x="820" y="50" width="140" height="60" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="Feature Merge" role="button" tabindex="0" />
+                <text x="890" y="80" text-anchor="middle" fill="#e2e2e2" font-size="13">Feature Merge</text>
+
+                <rect x="820" y="150" width="140" height="60" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="Random Forest" role="button" tabindex="0" />
+                <text x="890" y="180" text-anchor="middle" fill="#e2e2e2" font-size="13">Random Forest</text>
+                <text x="890" y="198" text-anchor="middle" fill="#c4c7c7" font-size="11">Parallel</text>
+
+                <rect x="820" y="250" width="140" height="50" rx="10" fill="#1e2020" stroke="#444748" class="pipeline-step" data-pipeline-step="Evaluation" role="button" tabindex="0" />
+                <text x="890" y="280" text-anchor="middle" fill="#e2e2e2" font-size="13">Evaluation</text>
+
+                <line x1="180" y1="60" x2="210" y2="60" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="370" y1="60" x2="400" y2="60" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="580" y1="60" x2="620" y2="40" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="580" y1="60" x2="620" y2="120" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="780" y1="40" x2="820" y2="80" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="780" y1="120" x2="820" y2="80" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="890" y1="110" x2="890" y2="150" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+                <line x1="890" y1="210" x2="890" y2="250" stroke="#c4c7c7" stroke-width="2" marker-end="url(#arrow)" />
+            </svg>
+        </div>
+        <p id="pipeline-detail" class="mt-4 text-sm text-on-surface-variant">Click a pipeline block to see what it does. CPU handles irregular graph features; GPU accelerates regular preprocessing and matrix operations.</p>
+    </div>
+
+    <div class="mt-12 bg-surface p-tile-padding border border-surface-variant">
+        <h3 class="font-label-mono text-label-mono text-on-surface-variant uppercase mb-6">About</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-xl">
+            <div class="flex flex-col items-center text-center">
+                <a class="w-20 h-20 rounded-full border border-outline-variant bg-surface-container-high flex items-center justify-center overflow-hidden shadow-[0_0_18px_rgba(250,189,50,0.08)] hover:border-secondary hover:shadow-[0_0_22px_rgba(250,189,50,0.18)] transition" href="https://github.com/NobleChicken97" target="_blank" rel="noreferrer" aria-label="GitHub profile of Arpan Goyal">
+                    <img src="https://github.com/NobleChicken97.png?size=160" alt="Arpan Goyal" class="w-full h-full object-cover" />
+                </a>
+                <div class="mt-3 text-on-surface">Arpan Goyal</div>
+                <div class="text-xs text-on-surface-variant">@NobleChicken97</div>
+            </div>
+            <div class="flex flex-col items-center text-center">
+                <a class="w-20 h-20 rounded-full border border-outline-variant bg-surface-container-high flex items-center justify-center overflow-hidden shadow-[0_0_18px_rgba(250,189,50,0.08)] hover:border-secondary hover:shadow-[0_0_22px_rgba(250,189,50,0.18)] transition" href="https://github.com/Nitingupta0" target="_blank" rel="noreferrer" aria-label="GitHub profile of Nitin Gupta">
+                    <img src="https://github.com/Nitingupta0.png?size=160" alt="Nitin Gupta" class="w-full h-full object-cover" />
+                </a>
+                <div class="mt-3 text-on-surface">Nitin Gupta</div>
+                <div class="text-xs text-on-surface-variant">@Nitingupta0</div>
+            </div>
+        </div>
+    </div>
+</section>
+</main>
+
+<div id="image-lightbox" class="lightbox fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+    <button id="lightbox-close" class="absolute top-6 right-6 text-xs uppercase tracking-widest border border-outline-variant text-on-surface-variant px-3 py-1.5 bg-surface/80 hover:border-secondary hover:text-secondary">Close</button>
+    <button id="lightbox-prev" class="lightbox-nav absolute left-6"><span class="material-symbols-outlined">chevron_left</span></button>
+    <button id="lightbox-next" class="lightbox-nav absolute right-6"><span class="material-symbols-outlined">chevron_right</span></button>
+    <div class="lightbox-panel flex flex-col items-center gap-3">
+        <img id="lightbox-image" class="max-h-[85vh] max-w-[90vw] border border-surface-variant bg-surface-container-lowest" alt="Expanded chart" />
+        <div id="lightbox-caption" class="text-xs text-on-surface-variant"></div>
+    </div>
+</div>
+
+<div id="module-lightbox" class="lightbox fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+    <button id="module-lightbox-close" class="absolute top-6 right-6 text-xs uppercase tracking-widest border border-outline-variant text-on-surface-variant px-3 py-1.5 bg-surface/80 hover:border-secondary hover:text-secondary">Close</button>
+    <div class="lightbox-panel w-full max-w-[1200px] max-h-[85vh] overflow-auto bg-surface border border-surface-variant p-6">
+        <div id="module-lightbox-content"></div>
+    </div>
+</div>
+
+<script>
+    const executeButtons = document.querySelectorAll('[data-execute]');
+    const tabs = document.querySelectorAll('[data-tab]');
+    const panels = document.querySelectorAll('[data-panel]');
+
+    const term = document.getElementById('terminal-output');
+    const syncText = document.getElementById('sync-text');
+    const syncInd = document.getElementById('sync-indicator');
+
+    const inputVertices = document.getElementById('input-vertices');
+    const inputThreads = document.getElementById('input-threads');
+    const inputDataset = document.getElementById('input-dataset');
+    const inputGpu = document.getElementById('input-gpu');
+    const runStatus = document.getElementById('run-status');
+    const runEngine = document.getElementById('run-engine');
+    const runElapsed = document.getElementById('run-elapsed');
+    const runProgress = document.getElementById('run-progress');
+    const lightbox = document.getElementById('image-lightbox');
+    const lightboxImage = document.getElementById('lightbox-image');
+    const lightboxCaption = document.getElementById('lightbox-caption');
+    const lightboxClose = document.getElementById('lightbox-close');
+    const lightboxPrev = document.getElementById('lightbox-prev');
+    const lightboxNext = document.getElementById('lightbox-next');
+    const moduleLightbox = document.getElementById('module-lightbox');
+    const moduleLightboxContent = document.getElementById('module-lightbox-content');
+    const moduleLightboxClose = document.getElementById('module-lightbox-close');
+
+    const charts = {};
+    const topologyStatus = document.getElementById('topology-status');
+    const topologyCanvas = document.getElementById('topology-canvas');
+    let topologyState = null;
+    let topologyAnim = null;
+    let runTimer = null;
+    let runStart = 0;
+    let zoomables = [];
+    let lightboxIndex = -1;
+    let moduleExpandables = [];
+
+    function getLightboxCaption(el) {
+        if (!el) return '';
+        const alt = el.getAttribute('alt');
+        if (alt) return alt;
+        const heading = el.closest('div')?.querySelector('h3');
+        return heading ? heading.textContent.trim() : '';
+    }
+
+    function getLightboxSource(el) {
+        if (!el) return '';
+        if (el.tagName === 'IMG') return el.currentSrc || el.src || '';
+        if (el.tagName === 'CANVAS') {
+            try {
+                return el.toDataURL('image/png');
+            } catch (err) {
+                return '';
+            }
+        }
+        return '';
+    }
+
+    function setLightboxNav() {
+        if (!lightboxPrev || !lightboxNext) return;
+        if (lightboxIndex < 0) {
+            lightboxPrev.disabled = true;
+            lightboxNext.disabled = true;
+            return;
+        }
+        lightboxPrev.disabled = lightboxIndex <= 0;
+        lightboxNext.disabled = lightboxIndex >= zoomables.length - 1;
+    }
+
+    function renderLightboxAt(index) {
+        const target = zoomables[index];
+        if (!target) return;
+        const src = getLightboxSource(target);
+        if (!src) return;
+        if (lightboxImage) lightboxImage.src = src;
+        if (lightboxCaption) lightboxCaption.textContent = getLightboxCaption(target);
+        lightboxIndex = index;
+        setLightboxNav();
+    }
+
+    function openLightbox(index) {
+        if (!lightbox) return;
+        renderLightboxAt(index);
+        lightbox.classList.add('is-open');
+        document.body.classList.add('lightbox-open');
+    }
+
+    function closeLightbox() {
+        if (!lightbox) return;
+        lightbox.classList.remove('is-open');
+        document.body.classList.remove('lightbox-open');
+    }
+
+    function moveLightbox(step) {
+        const nextIndex = lightboxIndex + step;
+        if (nextIndex < 0 || nextIndex >= zoomables.length) return;
+        renderLightboxAt(nextIndex);
+    }
+
+    function wireZoomables() {
+        zoomables = Array.from(document.querySelectorAll('.zoomable-graph'));
+        zoomables.forEach((el, index) => {
+            el.addEventListener('click', () => openLightbox(index));
+        });
+        setLightboxNav();
+    }
+
+    function buildModuleClone(el) {
+        const clone = el.cloneNode(true);
+        clone.classList.remove('module-expandable');
+        clone.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+        clone.querySelectorAll('button, input, select, textarea, a').forEach((node) => {
+            node.setAttribute('tabindex', '-1');
+        });
+        const originalCanvases = el.querySelectorAll('canvas');
+        const cloneCanvases = clone.querySelectorAll('canvas');
+        cloneCanvases.forEach((canvas, index) => {
+            const source = originalCanvases[index];
+            if (!source) return;
+            let dataUrl = '';
+            try {
+                dataUrl = source.toDataURL('image/png');
+            } catch (err) {
+                return;
+            }
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.className = canvas.className || '';
+            const styleAttr = canvas.getAttribute('style');
+            if (styleAttr) img.setAttribute('style', styleAttr);
+            const widthAttr = canvas.getAttribute('width');
+            const heightAttr = canvas.getAttribute('height');
+            if (widthAttr) img.setAttribute('width', widthAttr);
+            if (heightAttr) img.setAttribute('height', heightAttr);
+            img.alt = 'Expanded chart';
+            canvas.replaceWith(img);
+        });
+        return clone;
+    }
+
+    function openModuleLightbox(el) {
+        if (!moduleLightbox || !moduleLightboxContent) return;
+        if (lightbox?.classList.contains('is-open')) closeLightbox();
+        moduleLightboxContent.innerHTML = '';
+        moduleLightboxContent.appendChild(buildModuleClone(el));
+        moduleLightbox.classList.add('is-open');
+        document.body.classList.add('lightbox-open');
+    }
+
+    function closeModuleLightbox() {
+        if (!moduleLightbox) return;
+        moduleLightbox.classList.remove('is-open');
+        document.body.classList.remove('lightbox-open');
+        if (moduleLightboxContent) moduleLightboxContent.innerHTML = '';
+    }
+
+    function wireModuleExpandables() {
+        moduleExpandables = Array.from(document.querySelectorAll('.module-expandable'));
+        moduleExpandables.forEach((el) => {
+            el.addEventListener('click', (event) => {
+                if (event.target.closest('button, a, input, select, textarea, label')) return;
+                if (event.target.closest('.zoomable-graph')) return;
+                openModuleLightbox(el);
+            });
+        });
+    }
+
+    function setActiveTab(tabName) {
+        panels.forEach((panel) => {
+            const isActive = panel.dataset.panel === tabName;
+            panel.classList.toggle('hidden', !isActive);
+        });
+        tabs.forEach((tab) => {
+            const isActive = tab.dataset.tab === tabName;
+            tab.classList.toggle('border-b', isActive);
+            tab.classList.toggle('border-white', isActive);
+            tab.classList.toggle('text-white', isActive);
+            tab.classList.toggle('text-white/50', !isActive);
+        });
+    }
+
+    function setExecuteState(label, disabled) {
+        executeButtons.forEach((btn) => {
+            btn.textContent = label;
+            btn.disabled = disabled;
+            btn.classList.toggle('opacity-50', disabled);
+        });
+    }
+
+    function startRunTimer() {
+        runStart = Date.now();
+        if (runElapsed) runElapsed.textContent = '0s';
+        if (runProgress) runProgress.classList.remove('hidden');
+        if (runTimer) clearInterval(runTimer);
+        runTimer = setInterval(() => {
+            if (!runElapsed) return;
+            const seconds = Math.max(0, Math.floor((Date.now() - runStart) / 1000));
+            runElapsed.textContent = `${seconds}s`;
+        }, 500);
+    }
+
+    function stopRunTimer() {
+        if (runTimer) {
+            clearInterval(runTimer);
+            runTimer = null;
+        }
+        if (runElapsed && runStart) {
+            const seconds = Math.max(0, Math.floor((Date.now() - runStart) / 1000));
+            runElapsed.textContent = `${seconds}s`;
+        }
+        if (runProgress) runProgress.classList.add('hidden');
+        runStart = 0;
+    }
+
+    function updateDatasetInputState() {
+        const hasDataset = Boolean(inputDataset.value);
+        inputVertices.disabled = hasDataset;
+        inputVertices.classList.toggle('opacity-40', hasDataset);
+    }
+
+    async function loadDatasets() {
+        try {
+            const res = await fetch('/api/datasets');
+            const data = await res.json();
+            const datasets = data.datasets || [];
+            inputDataset.innerHTML = '<option value="">Synthetic (BA)</option>';
+            datasets.forEach((item) => {
+                const opt = document.createElement('option');
+                opt.value = item.file;
+                opt.textContent = item.name;
+                inputDataset.appendChild(opt);
+            });
+        } catch (err) {
+            inputDataset.innerHTML = '<option value="">Synthetic (BA)</option>';
+        }
+    }
+
+    function createChart(id, config) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (charts[id]) charts[id].destroy();
+        charts[id] = new Chart(el, config);
+    }
+
+    function initTopologyChart() {
+        if (typeof Chart === 'undefined') {
+            if (topologyStatus) topologyStatus.textContent = 'Chart library unavailable';
+            return;
+        }
+        createChart('chart-topology-split', {
+            type: 'doughnut',
+            data: {
+                labels: ['CPU', 'GPU'],
+                datasets: [{
+                    data: [1, 1],
+                    backgroundColor: ['#818CF8', '#FABD32'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '62%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#c4c7c7' } }
+                }
+            }
+        });
+    }
+
+    function updateTopologyChart(cpuCount, gpuCount) {
+        const chart = charts['chart-topology-split'];
+        if (!chart) return;
+        const total = cpuCount + gpuCount;
+        if (total <= 0) {
+            chart.data.datasets[0].data = [1, 1];
+            if (topologyStatus) topologyStatus.textContent = 'Awaiting run';
+        } else {
+            chart.data.datasets[0].data = [cpuCount, gpuCount];
+            if (topologyStatus) topologyStatus.textContent = `CPU ${cpuCount} / GPU ${gpuCount}`;
+        }
+        chart.update();
+    }
+
+    function createTopologyState(cpuRatio) {
+        const canvas = topologyCanvas;
+        const width = canvas.width;
+        const height = canvas.height;
+        const nodeCount = 140;
+        const cpuCount = Math.max(1, Math.round(nodeCount * cpuRatio));
+        const gpuCount = nodeCount - cpuCount;
+        const nodes = [];
+        const edges = [];
+
+        for (let i = 0; i < nodeCount; i += 1) {
+            const type = i < cpuCount ? 'cpu' : 'gpu';
+            nodes.push({
+                type,
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * 0.8,
+                vy: (Math.random() - 0.5) * 0.8,
+                r: type === 'cpu' ? 2.6 : 3.1
+            });
+        }
+
+        const edgeCount = 260;
+        for (let i = 0; i < edgeCount; i += 1) {
+            const a = Math.floor(Math.random() * nodeCount);
+            const b = Math.floor(Math.random() * nodeCount);
+            if (a !== b) edges.push([a, b]);
+        }
+
+        return { nodes, edges };
+    }
+
+    function resizeTopologyCanvas() {
+        if (!topologyCanvas) return;
+        const rect = topologyCanvas.getBoundingClientRect();
+        topologyCanvas.width = Math.max(1, Math.floor(rect.width));
+        topologyCanvas.height = Math.max(1, Math.floor(rect.height));
+    }
+
+    function drawTopology() {
+        if (!topologyCanvas || !topologyState) return;
+        const ctx = topologyCanvas.getContext('2d');
+        if (!ctx) return;
+
+        const width = topologyCanvas.width;
+        const height = topologyCanvas.height;
+        const pad = 12;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.save();
+        ctx.lineWidth = 0.9;
+        ctx.globalAlpha = 0.55;
+
+        topologyState.edges.forEach(([a, b]) => {
+            const n1 = topologyState.nodes[a];
+            const n2 = topologyState.nodes[b];
+            ctx.strokeStyle = n1.type === n2.type ? '#94A3B8' : '#A7F3D0';
+            ctx.beginPath();
+            ctx.moveTo(n1.x, n1.y);
+            ctx.lineTo(n2.x, n2.y);
+            ctx.stroke();
+        });
+
+        ctx.globalAlpha = 1.0;
+        topologyState.nodes.forEach((node) => {
+            node.x += node.vx;
+            node.y += node.vy;
+            if (node.x < pad || node.x > width - pad) node.vx *= -1;
+            if (node.y < pad || node.y > height - pad) node.vy *= -1;
+
+            ctx.fillStyle = node.type === 'cpu' ? '#A5B4FC' : '#FBBF24';
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.restore();
+        topologyAnim = requestAnimationFrame(drawTopology);
+    }
+
+    function initTopologyGraph() {
+        if (!topologyCanvas) return;
+        resizeTopologyCanvas();
+        topologyState = createTopologyState(0.5);
+        if (topologyAnim) cancelAnimationFrame(topologyAnim);
+        drawTopology();
+        window.addEventListener('resize', () => {
+            resizeTopologyCanvas();
+            topologyState = createTopologyState(0.5);
+        });
+    }
+
+    function updateTopologyGraph(cpuCount, gpuCount) {
+        if (!topologyCanvas) return;
+        const total = cpuCount + gpuCount;
+        const ratio = total > 0 ? cpuCount / total : 0.5;
+        topologyState = createTopologyState(ratio);
+    }
+
+    function initPipelineInteractivity() {
+        const detail = document.getElementById('pipeline-detail');
+        if (!detail) return;
+        const stepInfo = {
+            'Graph Input': 'Loads an edge list or generates a synthetic BA graph as the input data.',
+            'CSR Builder': 'Converts edges into CSR arrays for fast, cache-friendly neighbor traversal.',
+            'Workload Split': 'Splits vertices by degree so CPU gets irregular work and GPU gets regular work.',
+            'CPU Features': 'Computes degree, betweenness, PageRank, and clustering using OpenMP.',
+            'GPU Preprocess': 'Normalizes features with CUDA kernels (or CPU fallback if GPU is missing).',
+            'Feature Merge': 'Combines CPU and GPU outputs into a single feature matrix.',
+            'Random Forest': 'Trains parallel decision trees and aggregates votes for prediction.',
+            'Evaluation': 'Reports accuracy, F1, confusion matrix, and timing breakdowns.'
+        };
+
+        document.querySelectorAll('[data-pipeline-step]').forEach((node) => {
+            const step = node.getAttribute('data-pipeline-step');
+            if (!step) return;
+            const update = () => {
+                detail.textContent = stepInfo[step] || step;
+            };
+            node.addEventListener('click', update);
+            node.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    update();
+                }
+            });
+        });
+    }
+
+    function pickMaxThread(rows) {
+        const bySize = new Map();
+        rows.forEach((row) => {
+            const size = Number(row.vertices);
+            const threads = Number(row.threads);
+            if (!bySize.has(size) || threads > bySize.get(size).threads) {
+                bySize.set(size, row);
+            }
+        });
+        return Array.from(bySize.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map((entry) => entry[1]);
+    }
+
+    function renderDatasetCharts(rows) {
+        if (!rows.length) return;
+        const datasets = Array.from(new Set(rows.map((r) => r.dataset)));
+        const modes = ['seq', 'cpu', 'gpu'];
+        const colors = {
+            seq: '#4C72B0',
+            cpu: '#55A868',
+            gpu: '#DD8452'
+        };
+
+        const runtimeSeries = modes.map((mode) => ({
+            label: mode.toUpperCase(),
+            backgroundColor: colors[mode],
+            data: datasets.map((name) => {
+                const row = rows.find((r) => r.dataset === name && r.mode === mode);
+                return row ? Number(row.total_ms) : 0;
+            })
+        }));
+
+        const accuracySeries = modes.map((mode) => ({
+            label: mode.toUpperCase(),
+            backgroundColor: colors[mode],
+            data: datasets.map((name) => {
+                const row = rows.find((r) => r.dataset === name && r.mode === mode);
+                return row ? Number(row.accuracy) * 100 : 0;
+            })
+        }));
+
+        createChart('chart-dataset-runtime', {
+            type: 'bar',
+            data: { labels: datasets, datasets: runtimeSeries },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        createChart('chart-dataset-accuracy', {
+            type: 'bar',
+            data: { labels: datasets, datasets: accuracySeries },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { min: 0, max: 100 } } }
+        });
+    }
+
+    function renderPerfCharts(cpuRows, gpuRows) {
+        if (!cpuRows.length || !gpuRows.length) return;
+        const cpu = pickMaxThread(cpuRows);
+        const gpu = pickMaxThread(gpuRows);
+        const sizes = cpu.map((row) => String(row.vertices));
+
+        const cpuTotals = cpu.map((row) => Number(row.avg_total_ms));
+        const gpuTotals = gpu.map((row) => Number(row.avg_total_ms));
+
+        const cpuThrough = cpu.map((row) => Number(row.throughput_edges_per_ms));
+        const gpuThrough = gpu.map((row) => Number(row.throughput_edges_per_ms));
+
+        createChart('chart-cpu-gpu-total', {
+            type: 'bar',
+            data: {
+                labels: sizes,
+                datasets: [
+                    { label: 'CPU', backgroundColor: '#4C72B0', data: cpuTotals },
+                    { label: 'GPU', backgroundColor: '#DD8452', data: gpuTotals }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        createChart('chart-cpu-gpu-throughput', {
+            type: 'bar',
+            data: {
+                labels: sizes,
+                datasets: [
+                    { label: 'CPU', backgroundColor: '#4C72B0', data: cpuThrough },
+                    { label: 'GPU', backgroundColor: '#DD8452', data: gpuThrough }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    async function loadPresentationCharts() {
+        try {
+            const [datasetRes, cpuRes, gpuRes] = await Promise.all([
+                fetch('/api/presentation/datasets'),
+                fetch('/api/presentation/perf?mode=cpu'),
+                fetch('/api/presentation/perf?mode=gpu')
+            ]);
+            const datasetData = await datasetRes.json();
+            const cpuData = await cpuRes.json();
+            const gpuData = await gpuRes.json();
+
+            renderDatasetCharts(datasetData.rows || []);
+            renderPerfCharts(cpuData.rows || [], gpuData.rows || []);
+        } catch (err) {
+        }
+    }
+
+    async function runPipeline() {
+        const vertices = Number.parseInt(inputVertices.value, 10);
+        const threads = Number.parseInt(inputThreads.value, 10);
+        const dataset = inputDataset.value;
+        const gpu = inputGpu.checked;
+        const resultMarker = '\n__GRAPH_PULSE_RESULT__';
+
+        if (!Number.isInteger(threads)) {
+            runStatus.textContent = 'Invalid thread count';
+            return;
+        }
+        if (!dataset && !Number.isInteger(vertices)) {
+            runStatus.textContent = 'Invalid vertex count';
+            return;
+        }
+
+        setExecuteState('EXECUTING...', true);
+        syncText.textContent = 'Processing';
+        syncInd.classList.add('animate-pulse');
+        runStatus.textContent = 'Running...';
+        const introText = '> Starting GraphPulse Pipeline...\n> Dispatching OpenMP and CUDA kernels...\n';
+        term.textContent = introText;
+        startRunTimer();
+
+        try {
+            const res = await fetch('/api/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vertices, threads, gpu, dataset })
+            });
+
+            if (!res.ok) {
+                term.textContent += `\nERROR:\n${await res.text()}`;
+                runStatus.textContent = 'Error';
+                return;
+            }
+
+            const reader = res.body?.getReader();
+            const decoder = new TextDecoder();
+            let responseText = '';
+
+            if (!reader) {
+                throw new Error('Streaming response unavailable');
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                responseText += decoder.decode(value, { stream: true });
+                const markerIndex = responseText.indexOf(resultMarker);
+                const visibleOutput = markerIndex === -1
+                    ? responseText
+                    : responseText.slice(0, markerIndex);
+
+                term.textContent = introText + visibleOutput;
+                term.scrollTop = term.scrollHeight;
+            }
+
+            responseText += decoder.decode();
+            const markerIndex = responseText.indexOf(resultMarker);
+
+            if (markerIndex === -1) {
+                throw new Error('Missing execution result metadata');
+            }
+
+            const visibleOutput = responseText.slice(0, markerIndex);
+            const metaText = responseText.slice(markerIndex + resultMarker.length).trim();
+            const data = JSON.parse(metaText);
+
+            term.textContent = introText + visibleOutput;
+
+            if (!data.success) {
+                term.textContent += `\nERROR:\n${data.error}\n${data.stderr || ''}`;
+                runStatus.textContent = 'Error';
+                return;
+            }
+
+            const cpuVertices = Number(data.metrics.cpuVertices) || 0;
+            const gpuVertices = Number(data.metrics.gpuVertices) || 0;
+
+            document.getElementById('val-throughput').textContent = data.metrics.throughput ?? '--';
+            document.getElementById('val-speedup').textContent = data.metrics.speedup ? `${data.metrics.speedup}x` : '--';
+            document.getElementById('val-accuracy').textContent = data.metrics.accuracy !== 'N/A' ? `${data.metrics.accuracy}%` : '--';
+            document.getElementById('val-cpu').textContent = cpuVertices || '--';
+            document.getElementById('val-gpu').textContent = gpuVertices || '--';
+            document.getElementById('val-edges').textContent = data.metrics.edges ?? '--';
+            document.getElementById('val-total').textContent = data.metrics.totalMs ?? '--';
+            runEngine.textContent = data.metrics.engine ? data.metrics.engine.toUpperCase() : 'CPU';
+            updateTopologyChart(cpuVertices, gpuVertices);
+            updateTopologyGraph(cpuVertices, gpuVertices);
+            runStatus.textContent = 'Complete';
+        } catch (err) {
+            term.textContent += `\nNetwork/Server Error: ${err.message}`;
+            runStatus.textContent = 'Network error';
+        } finally {
+            setExecuteState('EXECUTE PIPELINE', false);
+            syncText.textContent = 'Ready';
+            syncInd.classList.remove('animate-pulse');
+            term.scrollTop = term.scrollHeight;
+            stopRunTimer();
+        }
+    }
+
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => setActiveTab(tab.dataset.tab));
+    });
+    executeButtons.forEach((btn) => {
+        btn.addEventListener('click', runPipeline);
+    });
+    inputDataset.addEventListener('change', updateDatasetInputState);
+    if (lightbox) {
+        lightbox.addEventListener('click', (event) => {
+            if (event.target === lightbox) closeLightbox();
+        });
+    }
+    if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+    if (lightboxPrev) lightboxPrev.addEventListener('click', () => moveLightbox(-1));
+    if (lightboxNext) lightboxNext.addEventListener('click', () => moveLightbox(1));
+    if (moduleLightbox) {
+        moduleLightbox.addEventListener('click', (event) => {
+            if (event.target === moduleLightbox) closeModuleLightbox();
+        });
+    }
+    if (moduleLightboxClose) moduleLightboxClose.addEventListener('click', closeModuleLightbox);
+    document.addEventListener('keydown', (event) => {
+        if (lightbox?.classList.contains('is-open')) {
+            if (event.key === 'Escape') closeLightbox();
+            if (event.key === 'ArrowLeft') moveLightbox(-1);
+            if (event.key === 'ArrowRight') moveLightbox(1);
+        }
+        if (moduleLightbox?.classList.contains('is-open')) {
+            if (event.key === 'Escape') closeModuleLightbox();
+        }
+    });
+
+    setActiveTab('systems');
+    updateDatasetInputState();
+    loadDatasets();
+    loadPresentationCharts();
+    initTopologyChart();
+    initTopologyGraph();
+    wireZoomables();
+    wireModuleExpandables();
+    initPipelineInteractivity();
+</script>
+</body></html>
